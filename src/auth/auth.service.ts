@@ -34,6 +34,7 @@ export class AuthService {
 
     return {
       accessToken,
+
       user: {
         id: user.id,
         name: user.name,
