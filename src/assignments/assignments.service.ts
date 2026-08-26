@@ -1,10 +1,7 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { eq, inArray } from 'drizzle-orm';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { inArray } from 'drizzle-orm';
 
+import { AssignmentQueue } from '../queues/assignment.queue';
 import { DatabaseService } from '../database/database.service';
 import {
   assignmentProperties,
@@ -16,7 +13,10 @@ import { CreateAssignmentDto } from './dto/create-assignment.dto';
 
 @Injectable()
 export class AssignmentsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly assignmentQueue: AssignmentQueue,
+    private readonly databaseService: DatabaseService,
+  ) {}
 
   async create(dto: CreateAssignmentDto, adminId: string) {
     const db = this.databaseService.db;
@@ -52,6 +52,7 @@ export class AssignmentsService {
 
       return assignment;
     });
+    await this.assignmentQueue.addAssignmentStatsJob(result.id);
 
     return result;
   }
