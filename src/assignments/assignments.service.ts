@@ -9,15 +9,17 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { AssignmentQueue } from '../queues/assignment.queue';
 import { DatabaseService } from '../database/database.service';
-import { UpdatePropertyDto } from './dto/update-property.dto';
 
 import {
   assignmentProperties,
   assignments,
+  auditLogs,
   properties,
+  propertyReviews,
 } from '../database/schema';
 
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
+import { UpdatePropertyDto } from './dto/update-property.dto';
 
 @Injectable()
 export class AssignmentsService {
@@ -109,106 +111,158 @@ export class AssignmentsService {
   ) {
     const db = this.databaseService.db;
 
-    const [assignment] = await db
-      .select()
-      .from(assignments)
-      .where(
-        and(
-          eq(assignments.id, assignmentId),
-          eq(assignments.checkerId, checkerId),
-          eq(assignments.status, 'CLAIMED'),
-        ),
-      )
-      .limit(1);
+    return db.transaction(async (tx) => {
+      // 1. Verify that the assignment belongs to this checker
+      const [assignment] = await tx
+        .select()
+        .from(assignments)
+        .where(
+          and(
+            eq(assignments.id, assignmentId),
+            eq(assignments.checkerId, checkerId),
+            eq(assignments.status, 'CLAIMED'),
+          ),
+        )
+        .limit(1);
 
-    if (!assignment) {
-      throw new NotFoundException(
-        'Assignment not found, not claimed by you, or not in CLAIMED status',
-      );
-    }
-
-    const [assignmentProperty] = await db
-      .select({
-        id: assignmentProperties.id,
-        propertyId: assignmentProperties.propertyId,
-      })
-      .from(assignmentProperties)
-      .where(
-        and(
-          eq(assignmentProperties.assignmentId, assignmentId),
-          eq(assignmentProperties.propertyId, propertyId),
-        ),
-      )
-      .limit(1);
-
-    if (!assignmentProperty) {
-      throw new NotFoundException(
-        'Property does not belong to this assignment',
-      );
-    }
-
-    const [existingProperty] = await db
-      .select()
-      .from(properties)
-      .where(eq(properties.id, propertyId))
-      .limit(1);
-
-    if (!existingProperty) {
-      throw new NotFoundException('Property not found');
-    }
-
-    const oldValues = { ...existingProperty };
-
-    const updateData: Record<string, unknown> = {};
-
-    const allowedFields = [
-      'address',
-      'city',
-      'state',
-      'zip',
-      'bedrooms',
-      'bathrooms',
-      'propertyType',
-      'yearBuilt',
-      'livingArea',
-      'lotSize',
-      'heating',
-      'cooling',
-      'water',
-      'sewer',
-      'appliances',
-      'features',
-      'listingAgent',
-      'buyerAgent',
-      'status',
-    ] as const;
-
-    for (const field of allowedFields) {
-      if (dto[field] !== undefined) {
-        updateData[field] = dto[field];
+      if (!assignment) {
+        throw new NotFoundException(
+          'Assignment not found, not claimed by you, or not in CLAIMED status',
+        );
       }
-    }
 
-    if (Object.keys(updateData).length === 0) {
-      throw new BadRequestException('No property fields were provided');
-    }
+      // 2. Verify that the property belongs to this assignment
+      const [assignmentProperty] = await tx
+        .select({
+          id: assignmentProperties.id,
+          propertyId: assignmentProperties.propertyId,
+        })
+        .from(assignmentProperties)
+        .where(
+          and(
+            eq(assignmentProperties.assignmentId, assignmentId),
+            eq(assignmentProperties.propertyId, propertyId),
+          ),
+        )
+        .limit(1);
 
-    const [updatedProperty] = await db
-      .update(properties)
-      .set({
-        ...updateData,
-        updatedAt: new Date(),
-      })
-      .where(eq(properties.id, propertyId))
-      .returning();
+      if (!assignmentProperty) {
+        throw new NotFoundException(
+          'Property does not belong to this assignment',
+        );
+      }
 
-    return {
-      assignmentId,
-      property: updatedProperty,
-      oldValues,
-      newValues: updatedProperty,
-    };
+      // 3. Get the current property
+      const [existingProperty] = await tx
+        .select()
+        .from(properties)
+        .where(eq(properties.id, propertyId))
+        .limit(1);
+
+      if (!existingProperty) {
+        throw new NotFoundException('Property not found');
+      }
+
+      // 4. Store a snapshot of the old values
+      const oldValues = { ...existingProperty };
+
+      // 5. Build the update object using only allowed fields
+      const updateData: Record<string, unknown> = {};
+
+      const allowedFields = [
+        'address',
+        'city',
+        'state',
+        'zip',
+        'bedrooms',
+        'bathrooms',
+        'propertyType',
+        'yearBuilt',
+        'livingArea',
+        'lotSize',
+        'heating',
+        'cooling',
+        'water',
+        'sewer',
+        'appliances',
+        'features',
+        'listingAgent',
+        'buyerAgent',
+        'status',
+      ] as const;
+
+      for (const field of allowedFields) {
+        if (dto[field] !== undefined) {
+          updateData[field] = dto[field];
+        }
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        throw new BadRequestException('No property fields were provided');
+      }
+
+      // 6. Determine which fields actually changed
+      const changedFields = Object.keys(updateData).filter((field) => {
+        const oldValue =
+          existingProperty[field as keyof typeof existingProperty];
+
+        const newValue = updateData[field];
+
+        return JSON.stringify(oldValue) !== JSON.stringify(newValue);
+      });
+
+      if (changedFields.length === 0) {
+        throw new BadRequestException(
+          'The provided values are the same as the existing values',
+        );
+      }
+
+      // 7. Update the property
+      const [updatedProperty] = await tx
+        .update(properties)
+        .set({
+          ...updateData,
+          updatedAt: new Date(),
+        })
+        .where(eq(properties.id, propertyId))
+        .returning();
+
+      // 8. Create a property review
+      const [review] = await tx
+        .insert(propertyReviews)
+        .values({
+          assignmentPropertyId: assignmentProperty.id,
+          checkerId,
+          oldValues,
+          newValues: updatedProperty,
+          checkerNotes: null,
+          reviewerNotes: null,
+          status: 'PENDING',
+        })
+        .returning();
+
+      // 9. Create an audit log
+      const [auditLog] = await tx
+        .insert(auditLogs)
+        .values({
+          propertyId,
+          userId: checkerId,
+          changedFields,
+          oldValues,
+          newValues: updatedProperty,
+        })
+        .returning();
+
+      // 10. Return the updated property and verification records
+      return {
+        assignmentId,
+        property: updatedProperty,
+        review,
+        auditLog,
+      };
+    });
   }
+
   async findOne(assignmentId: string, userId: string, userRole: string) {
     const db = this.databaseService.db;
 
