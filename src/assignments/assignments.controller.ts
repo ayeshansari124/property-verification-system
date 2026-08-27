@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Request,
   UseGuards,
@@ -14,6 +15,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 
 import { AssignmentsService } from './assignments.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
+import { UpdatePropertyDto } from './dto/update-property.dto';
 
 @Controller('assignments')
 @UseGuards(JwtGuard, RolesGuard)
@@ -30,6 +32,22 @@ export class AssignmentsController {
   @Roles('DATA_CHECKER')
   async claim(@Param('id') assignmentId: string, @Request() req: any) {
     return this.assignmentsService.claim(assignmentId, req.user.id);
+  }
+
+  @Patch(':assignmentId/properties/:propertyId')
+  @Roles('DATA_CHECKER')
+  async updateProperty(
+    @Param('assignmentId') assignmentId: string,
+    @Param('propertyId') propertyId: string,
+    @Body() dto: UpdatePropertyDto,
+    @Request() req: any,
+  ) {
+    return this.assignmentsService.updateProperty(
+      assignmentId,
+      propertyId,
+      req.user.id,
+      dto,
+    );
   }
 
   @Get(':id')

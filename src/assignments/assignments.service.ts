@@ -9,6 +9,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { AssignmentQueue } from '../queues/assignment.queue';
 import { DatabaseService } from '../database/database.service';
+import { UpdatePropertyDto } from './dto/update-property.dto';
 
 import {
   assignmentProperties,
@@ -100,6 +101,114 @@ export class AssignmentsService {
     return claimedAssignment;
   }
 
+  async updateProperty(
+    assignmentId: string,
+    propertyId: string,
+    checkerId: string,
+    dto: UpdatePropertyDto,
+  ) {
+    const db = this.databaseService.db;
+
+    const [assignment] = await db
+      .select()
+      .from(assignments)
+      .where(
+        and(
+          eq(assignments.id, assignmentId),
+          eq(assignments.checkerId, checkerId),
+          eq(assignments.status, 'CLAIMED'),
+        ),
+      )
+      .limit(1);
+
+    if (!assignment) {
+      throw new NotFoundException(
+        'Assignment not found, not claimed by you, or not in CLAIMED status',
+      );
+    }
+
+    const [assignmentProperty] = await db
+      .select({
+        id: assignmentProperties.id,
+        propertyId: assignmentProperties.propertyId,
+      })
+      .from(assignmentProperties)
+      .where(
+        and(
+          eq(assignmentProperties.assignmentId, assignmentId),
+          eq(assignmentProperties.propertyId, propertyId),
+        ),
+      )
+      .limit(1);
+
+    if (!assignmentProperty) {
+      throw new NotFoundException(
+        'Property does not belong to this assignment',
+      );
+    }
+
+    const [existingProperty] = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.id, propertyId))
+      .limit(1);
+
+    if (!existingProperty) {
+      throw new NotFoundException('Property not found');
+    }
+
+    const oldValues = { ...existingProperty };
+
+    const updateData: Record<string, unknown> = {};
+
+    const allowedFields = [
+      'address',
+      'city',
+      'state',
+      'zip',
+      'bedrooms',
+      'bathrooms',
+      'propertyType',
+      'yearBuilt',
+      'livingArea',
+      'lotSize',
+      'heating',
+      'cooling',
+      'water',
+      'sewer',
+      'appliances',
+      'features',
+      'listingAgent',
+      'buyerAgent',
+      'status',
+    ] as const;
+
+    for (const field of allowedFields) {
+      if (dto[field] !== undefined) {
+        updateData[field] = dto[field];
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestException('No property fields were provided');
+    }
+
+    const [updatedProperty] = await db
+      .update(properties)
+      .set({
+        ...updateData,
+        updatedAt: new Date(),
+      })
+      .where(eq(properties.id, propertyId))
+      .returning();
+
+    return {
+      assignmentId,
+      property: updatedProperty,
+      oldValues,
+      newValues: updatedProperty,
+    };
+  }
   async findOne(assignmentId: string, userId: string, userRole: string) {
     const db = this.databaseService.db;
 
