@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -97,5 +98,56 @@ export class AssignmentsService {
     }
 
     return claimedAssignment;
+  }
+
+  async findOne(assignmentId: string, userId: string, userRole: string) {
+    const db = this.databaseService.db;
+
+    const [assignment] = await db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.id, assignmentId))
+      .limit(1);
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    // Data Checkers can only view assignments assigned to them.
+    if (userRole === 'DATA_CHECKER' && assignment.checkerId !== userId) {
+      throw new ForbiddenException('You are not assigned to this assignment');
+    }
+
+    const assignedProperties = await db
+      .select({
+        id: properties.id,
+        address: properties.address,
+        city: properties.city,
+        state: properties.state,
+        zip: properties.zip,
+        bedrooms: properties.bedrooms,
+        bathrooms: properties.bathrooms,
+        propertyType: properties.propertyType,
+        yearBuilt: properties.yearBuilt,
+        livingArea: properties.livingArea,
+        lotSize: properties.lotSize,
+        heating: properties.heating,
+        cooling: properties.cooling,
+        water: properties.water,
+        sewer: properties.sewer,
+        appliances: properties.appliances,
+        features: properties.features,
+        listingAgent: properties.listingAgent,
+        buyerAgent: properties.buyerAgent,
+        status: properties.status,
+      })
+      .from(assignmentProperties)
+      .innerJoin(properties, eq(assignmentProperties.propertyId, properties.id))
+      .where(eq(assignmentProperties.assignmentId, assignmentId));
+
+    return {
+      ...assignment,
+      properties: assignedProperties,
+    };
   }
 }

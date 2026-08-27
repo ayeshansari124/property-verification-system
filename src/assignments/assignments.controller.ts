@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Post,
   Request,
@@ -29,5 +30,15 @@ export class AssignmentsController {
   @Roles('DATA_CHECKER')
   async claim(@Param('id') assignmentId: string, @Request() req: any) {
     return this.assignmentsService.claim(assignmentId, req.user.id);
+  }
+
+  @Get(':id')
+  @Roles('ADMIN', 'DATA_CHECKER', 'REVIEWER')
+  async findOne(@Param('id') assignmentId: string, @Request() req: any) {
+    return this.assignmentsService.findOne(
+      assignmentId,
+      req.user.id,
+      req.user.role,
+    );
   }
 }
