@@ -1,8 +1,14 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { inArray } from 'drizzle-orm';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { AssignmentQueue } from '../queues/assignment.queue';
 import { DatabaseService } from '../database/database.service';
+
 import {
   assignmentProperties,
   assignments,
@@ -52,8 +58,44 @@ export class AssignmentsService {
 
       return assignment;
     });
+
     await this.assignmentQueue.addAssignmentStatsJob(result.id);
 
     return result;
+  }
+
+  async claim(assignmentId: string, checkerId: string) {
+    const db = this.databaseService.db;
+
+    const [claimedAssignment] = await db
+      .update(assignments)
+      .set({
+        status: 'CLAIMED',
+        checkerId,
+        claimedAt: new Date(),
+      })
+      .where(
+        and(eq(assignments.id, assignmentId), eq(assignments.status, 'OPEN')),
+      )
+      .returning();
+
+    if (!claimedAssignment) {
+      const [existingAssignment] = await db
+        .select({
+          id: assignments.id,
+          status: assignments.status,
+        })
+        .from(assignments)
+        .where(eq(assignments.id, assignmentId))
+        .limit(1);
+
+      if (!existingAssignment) {
+        throw new NotFoundException('Assignment not found');
+      }
+
+      throw new ConflictException('Assignment has already been claimed');
+    }
+
+    return claimedAssignment;
   }
 }
