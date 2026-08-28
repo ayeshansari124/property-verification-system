@@ -5,11 +5,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, inArray } from 'drizzle-orm';
+
+import { and, eq, inArray, not } from 'drizzle-orm';
 
 import { AssignmentQueue } from '../queues/assignment.queue';
 import { DatabaseService } from '../database/database.service';
+
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { CreateAssignmentDto } from './dto/create-assignment.dto';
 
 import {
   assignmentProperties,
@@ -18,8 +21,6 @@ import {
   propertyReviews,
 } from '../database/schema';
 
-import { CreateAssignmentDto } from './dto/create-assignment.dto';
-
 @Injectable()
 export class AssignmentsService {
   constructor(
@@ -27,10 +28,22 @@ export class AssignmentsService {
     private readonly databaseService: DatabaseService,
   ) {}
 
+  // ============================================================
+  // CREATE
+  // ============================================================
+
+  /**
+   * ADMIN creates a new assignment.
+   *
+   * New assignments always start as OPEN.
+   */
   async create(dto: CreateAssignmentDto, adminId: string) {
     const db = this.databaseService.db;
 
     const result = await db.transaction(async (tx) => {
+      /*
+       * Make sure every requested property exists.
+       */
       const selectedProperties = await tx
         .select({
           id: properties.id,
@@ -42,6 +55,9 @@ export class AssignmentsService {
         throw new BadRequestException('One or more property IDs do not exist');
       }
 
+      /*
+       * Create the assignment.
+       */
       const [assignment] = await tx
         .insert(assignments)
         .values({
@@ -52,6 +68,9 @@ export class AssignmentsService {
         })
         .returning();
 
+      /*
+       * Attach properties to the assignment.
+       */
       await tx.insert(assignmentProperties).values(
         dto.propertyIds.map((propertyId) => ({
           assignmentId: assignment.id,
@@ -62,11 +81,23 @@ export class AssignmentsService {
       return assignment;
     });
 
+    /*
+     * Keep the existing queue behavior.
+     */
     await this.assignmentQueue.addAssignmentStatsJob(result.id);
 
     return result;
   }
 
+  // ============================================================
+  // CLAIM
+  // ============================================================
+
+  /**
+   * DATA_CHECKER claims an OPEN assignment.
+   *
+   * OPEN -> CLAIMED
+   */
   async claim(assignmentId: string, checkerId: string) {
     const db = this.databaseService.db;
 
@@ -96,20 +127,83 @@ export class AssignmentsService {
         throw new NotFoundException('Assignment not found');
       }
 
-      throw new ConflictException('Assignment has already been claimed');
+      throw new ConflictException(
+        `Assignment cannot be claimed because it is already ${existingAssignment.status}`,
+      );
     }
 
     return claimedAssignment;
   }
 
+  // ============================================================
+  // START
+  // ============================================================
+
   /**
-   * Checker proposes a property change.
+   * DATA_CHECKER starts working on their assignment.
+   *
+   * CLAIMED -> IN_PROGRESS
+   */
+  async start(assignmentId: string, checkerId: string) {
+    const db = this.databaseService.db;
+
+    const [startedAssignment] = await db
+      .update(assignments)
+      .set({
+        status: 'IN_PROGRESS',
+      })
+      .where(
+        and(
+          eq(assignments.id, assignmentId),
+          eq(assignments.checkerId, checkerId),
+          eq(assignments.status, 'CLAIMED'),
+        ),
+      )
+      .returning();
+
+    if (!startedAssignment) {
+      const [existingAssignment] = await db
+        .select({
+          id: assignments.id,
+          status: assignments.status,
+          checkerId: assignments.checkerId,
+        })
+        .from(assignments)
+        .where(eq(assignments.id, assignmentId))
+        .limit(1);
+
+      if (!existingAssignment) {
+        throw new NotFoundException('Assignment not found');
+      }
+
+      if (existingAssignment.checkerId !== checkerId) {
+        throw new ForbiddenException('You are not assigned to this assignment');
+      }
+
+      throw new ConflictException(
+        `Assignment cannot be started because it is ${existingAssignment.status}`,
+      );
+    }
+
+    return startedAssignment;
+  }
+
+  // ============================================================
+  // UPDATE PROPERTY / CREATE REVIEW
+  // ============================================================
+
+  /**
+   * DATA_CHECKER proposes a property change.
    *
    * IMPORTANT:
+   *
    * The actual properties table is NOT modified here.
    *
-   * The proposed values are stored in propertyReviews.newValues
-   * and must be approved by a reviewer before becoming real.
+   * The proposed values are stored in
+   * propertyReviews.newValues.
+   *
+   * The real property is changed only when
+   * a reviewer approves the review.
    */
   async updateProperty(
     assignmentId: string,
@@ -121,8 +215,14 @@ export class AssignmentsService {
 
     return db.transaction(async (tx) => {
       /*
-       * 1. Verify that the assignment belongs to this checker
-       *    and is currently CLAIMED.
+       * 1. Verify that the assignment belongs
+       *    to this checker.
+       *
+       * The checker can edit while the assignment is:
+       *
+       * CLAIMED
+       * OR
+       * IN_PROGRESS
        */
       const [assignment] = await tx
         .select()
@@ -131,19 +231,20 @@ export class AssignmentsService {
           and(
             eq(assignments.id, assignmentId),
             eq(assignments.checkerId, checkerId),
-            eq(assignments.status, 'CLAIMED'),
+            inArray(assignments.status, ['CLAIMED', 'IN_PROGRESS']),
           ),
         )
         .limit(1);
 
       if (!assignment) {
         throw new NotFoundException(
-          'Assignment not found, not claimed by you, or not in CLAIMED status',
+          'Assignment not found, not claimed by you, or not available for editing',
         );
       }
 
       /*
-       * 2. Verify that the property belongs to this assignment.
+       * 2. Verify that the property belongs
+       *    to this assignment.
        */
       const [assignmentProperty] = await tx
         .select({
@@ -168,7 +269,7 @@ export class AssignmentsService {
       /*
        * 3. Get the CURRENT property.
        *
-       * This becomes the oldValues snapshot.
+       * This becomes oldValues.
        */
       const [existingProperty] = await tx
         .select()
@@ -180,15 +281,13 @@ export class AssignmentsService {
         throw new NotFoundException('Property not found');
       }
 
-      const oldValues = { ...existingProperty };
+      const oldValues = {
+        ...existingProperty,
+      };
 
       /*
-       * 4. Build the proposed property.
-       *
-       * The current property is copied and only the fields
-       * supplied by the checker are changed in memory.
-       *
-       * This is NOT written to the properties table.
+       * 4. Build the proposed property
+       *    entirely in memory.
        */
       const newValues = {
         ...existingProperty,
@@ -221,6 +320,7 @@ export class AssignmentsService {
       for (const field of allowedFields) {
         if (dto[field] !== undefined) {
           newValues[field] = dto[field];
+
           changedFields.push(field);
         }
       }
@@ -230,11 +330,9 @@ export class AssignmentsService {
       }
 
       /*
-       * 5. Prevent multiple PENDING reviews for the same
-       *    assignment-property.
-       *
-       * RETURNED and REJECTED reviews do not block a new
-       * proposal. This allows the checker to resubmit.
+       * 5. Don't allow multiple PENDING
+       *    reviews for the same property
+       *    within this assignment.
        */
       const [existingPendingReview] = await tx
         .select({
@@ -256,13 +354,9 @@ export class AssignmentsService {
       }
 
       /*
-       * 6. Create a NEW review.
+       * 6. Create the property review.
        *
-       * This works for:
-       *
-       * - first submission
-       * - resubmission after RETURNED
-       * - another proposal after REJECTED
+       * The properties table remains unchanged.
        */
       const [review] = await tx
         .insert(propertyReviews)
@@ -277,12 +371,12 @@ export class AssignmentsService {
         .returning();
 
       /*
-       * IMPORTANT:
+       * DO NOT write to audit_logs here.
        *
-       * We intentionally DO NOT create an audit log here.
+       * This is only a proposal.
        *
-       * audit_logs represents actual property changes.
-       * The actual property only changes after reviewer approval.
+       * The actual property change is recorded
+       * when the reviewer approves it.
        */
 
       return {
@@ -297,9 +391,164 @@ export class AssignmentsService {
     });
   }
 
+  // ============================================================
+  // SUBMIT
+  // ============================================================
+
+  /**
+   * DATA_CHECKER submits their assignment.
+   *
+   * IN_PROGRESS -> SUBMITTED
+   *
+   * An assignment cannot be submitted while
+   * any property still has a PENDING review.
+   */
+  async submit(assignmentId: string, checkerId: string) {
+    const db = this.databaseService.db;
+
+    return db.transaction(async (tx) => {
+      /*
+       * 1. Verify ownership and state.
+       */
+      const [assignment] = await tx
+        .select()
+        .from(assignments)
+        .where(
+          and(
+            eq(assignments.id, assignmentId),
+            eq(assignments.checkerId, checkerId),
+          ),
+        )
+        .limit(1);
+
+      if (!assignment) {
+        throw new NotFoundException(
+          'Assignment not found or not assigned to you',
+        );
+      }
+
+      if (assignment.status !== 'IN_PROGRESS') {
+        throw new ConflictException(
+          `Assignment cannot be submitted because it is ${assignment.status}`,
+        );
+      }
+
+      /*
+       * 2. Find assignment properties
+       *    that still have PENDING reviews.
+       */
+      const pendingReviews = await tx
+        .select({
+          reviewId: propertyReviews.id,
+        })
+        .from(propertyReviews)
+        .innerJoin(
+          assignmentProperties,
+          eq(propertyReviews.assignmentPropertyId, assignmentProperties.id),
+        )
+        .where(
+          and(
+            eq(assignmentProperties.assignmentId, assignmentId),
+            eq(propertyReviews.status, 'PENDING'),
+          ),
+        );
+
+      if (pendingReviews.length > 0) {
+        throw new ConflictException(
+          `Assignment cannot be submitted because ${pendingReviews.length} property review(s) are still pending`,
+        );
+      }
+
+      /*
+       * 3. Submit assignment.
+       */
+      const [submittedAssignment] = await tx
+        .update(assignments)
+        .set({
+          status: 'SUBMITTED',
+          submittedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(assignments.id, assignmentId),
+            eq(assignments.checkerId, checkerId),
+            eq(assignments.status, 'IN_PROGRESS'),
+          ),
+        )
+        .returning();
+
+      if (!submittedAssignment) {
+        throw new ConflictException(
+          'Assignment was already submitted or changed by another request',
+        );
+      }
+
+      return submittedAssignment;
+    });
+  }
+
+  // ============================================================
+  // COMPLETE
+  // ============================================================
+
+  /**
+   * ADMIN or REVIEWER completes a submitted assignment.
+   *
+   * SUBMITTED -> COMPLETED
+   */
+  async complete(assignmentId: string) {
+    const db = this.databaseService.db;
+
+    const [completedAssignment] = await db
+      .update(assignments)
+      .set({
+        status: 'COMPLETED',
+        completedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(assignments.id, assignmentId),
+          eq(assignments.status, 'SUBMITTED'),
+        ),
+      )
+      .returning();
+
+    if (!completedAssignment) {
+      const [existingAssignment] = await db
+        .select({
+          id: assignments.id,
+          status: assignments.status,
+        })
+        .from(assignments)
+        .where(eq(assignments.id, assignmentId))
+        .limit(1);
+
+      if (!existingAssignment) {
+        throw new NotFoundException('Assignment not found');
+      }
+
+      throw new ConflictException(
+        `Assignment cannot be completed because it is ${existingAssignment.status}`,
+      );
+    }
+
+    return completedAssignment;
+  }
+
+  // ============================================================
+  // FIND ONE
+  // ============================================================
+
+  /**
+   * Get one assignment together with
+   * its assigned properties.
+   */
   async findOne(assignmentId: string, userId: string, userRole: string) {
     const db = this.databaseService.db;
 
+    /*
+     * 1. Find assignment.
+     */
     const [assignment] = await db
       .select()
       .from(assignments)
@@ -311,12 +560,16 @@ export class AssignmentsService {
     }
 
     /*
-     * Data Checkers can only view assignments assigned to them.
+     * 2. DATA_CHECKER can only view
+     *    their own assignment.
      */
     if (userRole === 'DATA_CHECKER' && assignment.checkerId !== userId) {
       throw new ForbiddenException('You are not assigned to this assignment');
     }
 
+    /*
+     * 3. Get assigned properties.
+     */
     const assignedProperties = await db
       .select({
         id: properties.id,
