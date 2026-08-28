@@ -9,17 +9,17 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { AssignmentQueue } from '../queues/assignment.queue';
 import { DatabaseService } from '../database/database.service';
+import { UpdatePropertyDto } from './dto/update-property.dto';
 
 import {
   assignmentProperties,
   assignments,
-  auditLogs,
   properties,
   propertyReviews,
+  auditLogs,
 } from '../database/schema';
 
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
-import { UpdatePropertyDto } from './dto/update-property.dto';
 
 @Injectable()
 export class AssignmentsService {
@@ -103,6 +103,13 @@ export class AssignmentsService {
     return claimedAssignment;
   }
 
+  /**
+   * Checker proposes a property change.
+   *
+   * IMPORTANT:
+   * The actual properties table is NOT modified here.
+   * The proposed change is stored in propertyReviews.newValues.
+   */
   async updateProperty(
     assignmentId: string,
     propertyId: string,
@@ -112,7 +119,10 @@ export class AssignmentsService {
     const db = this.databaseService.db;
 
     return db.transaction(async (tx) => {
-      // 1. Verify that the assignment belongs to this checker
+      /*
+       * 1. Verify that the assignment belongs to this checker
+       *    and is currently CLAIMED.
+       */
       const [assignment] = await tx
         .select()
         .from(assignments)
@@ -131,7 +141,9 @@ export class AssignmentsService {
         );
       }
 
-      // 2. Verify that the property belongs to this assignment
+      /*
+       * 2. Verify that the property belongs to this assignment.
+       */
       const [assignmentProperty] = await tx
         .select({
           id: assignmentProperties.id,
@@ -152,7 +164,11 @@ export class AssignmentsService {
         );
       }
 
-      // 3. Get the current property
+      /*
+       * 3. Get the CURRENT property.
+       *
+       * This becomes our oldValues snapshot.
+       */
       const [existingProperty] = await tx
         .select()
         .from(properties)
@@ -163,11 +179,19 @@ export class AssignmentsService {
         throw new NotFoundException('Property not found');
       }
 
-      // 4. Store a snapshot of the old values
       const oldValues = { ...existingProperty };
 
-      // 5. Build the update object using only allowed fields
-      const updateData: Record<string, unknown> = {};
+      /*
+       * 4. Build the proposed property.
+       *
+       * Start with the current property and apply only
+       * fields supplied by the checker.
+       *
+       * This is NOT written to the properties table.
+       */
+      const newValues = {
+        ...existingProperty,
+      } as Record<string, unknown>;
 
       const allowedFields = [
         'address',
@@ -191,74 +215,81 @@ export class AssignmentsService {
         'status',
       ] as const;
 
+      const changedFields: string[] = [];
+
       for (const field of allowedFields) {
         if (dto[field] !== undefined) {
-          updateData[field] = dto[field];
+          newValues[field] = dto[field];
+          changedFields.push(field);
         }
       }
 
-      if (Object.keys(updateData).length === 0) {
+      if (changedFields.length === 0) {
         throw new BadRequestException('No property fields were provided');
       }
 
-      // 6. Determine which fields actually changed
-      const changedFields = Object.keys(updateData).filter((field) => {
-        const oldValue =
-          existingProperty[field as keyof typeof existingProperty];
+      /*
+       * 5. Prevent multiple pending changes for the same
+       *    assignment-property.
+       */
+      const [existingPendingReview] = await tx
+        .select({
+          id: propertyReviews.id,
+        })
+        .from(propertyReviews)
+        .where(
+          and(
+            eq(propertyReviews.assignmentPropertyId, assignmentProperty.id),
+            eq(propertyReviews.status, 'PENDING'),
+          ),
+        )
+        .limit(1);
 
-        const newValue = updateData[field];
-
-        return JSON.stringify(oldValue) !== JSON.stringify(newValue);
-      });
-
-      if (changedFields.length === 0) {
-        throw new BadRequestException(
-          'The provided values are the same as the existing values',
+      if (existingPendingReview) {
+        throw new ConflictException(
+          'This property already has a pending review',
         );
       }
 
-      // 7. Update the property
-      const [updatedProperty] = await tx
-        .update(properties)
-        .set({
-          ...updateData,
-          updatedAt: new Date(),
-        })
-        .where(eq(properties.id, propertyId))
-        .returning();
-
-      // 8. Create a property review
+      /*
+       * 6. Create the review proposal.
+       *
+       * This is the key difference from the old implementation:
+       *
+       * properties table = UNCHANGED
+       * propertyReviews.newValues = proposed change
+       */
       const [review] = await tx
         .insert(propertyReviews)
         .values({
           assignmentPropertyId: assignmentProperty.id,
           checkerId,
           oldValues,
-          newValues: updatedProperty,
+          newValues,
           checkerNotes: null,
-          reviewerNotes: null,
           status: 'PENDING',
         })
         .returning();
 
-      // 9. Create an audit log
-      const [auditLog] = await tx
-        .insert(auditLogs)
-        .values({
-          propertyId,
-          userId: checkerId,
-          changedFields,
-          oldValues,
-          newValues: updatedProperty,
-        })
-        .returning();
+      /*
+       * 7. Record the proposed change in the audit log.
+       */
+      await tx.insert(auditLogs).values({
+        propertyId,
+        userId: checkerId,
+        changedFields,
+        oldValues,
+        newValues,
+      });
 
-      // 10. Return the updated property and verification records
       return {
         assignmentId,
-        property: updatedProperty,
-        review,
-        auditLog,
+        propertyId,
+        reviewId: review.id,
+        status: review.status,
+        changedFields,
+        oldValues,
+        newValues,
       };
     });
   }
@@ -276,7 +307,6 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    // Data Checkers can only view assignments assigned to them.
     if (userRole === 'DATA_CHECKER' && assignment.checkerId !== userId) {
       throw new ForbiddenException('You are not assigned to this assignment');
     }

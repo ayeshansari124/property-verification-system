@@ -5,7 +5,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { QueuesModule } from './queues/queues.module';
-
+import { ReviewsModule } from './reviews/reviews.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -18,6 +18,7 @@ import { QueuesModule } from './queues/queues.module';
 
     AssignmentsModule,
     QueuesModule,
+    ReviewsModule,
   ],
 })
 export class AppModule {}
