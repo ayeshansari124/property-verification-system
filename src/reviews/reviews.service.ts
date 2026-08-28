@@ -12,6 +12,7 @@ import {
   assignments,
   properties,
   propertyReviews,
+  auditLogs,
 } from '../database/schema';
 
 @Injectable()
@@ -103,8 +104,8 @@ export class ReviewsService {
 
     return db.transaction(async (tx) => {
       /*
-       * Get the pending review together with the
-       * assignment-property relationship.
+       * 1. Get the review together with the
+       *    assignment-property relationship.
        */
       const [review] = await tx
         .select({
@@ -124,6 +125,9 @@ export class ReviewsService {
         throw new NotFoundException('Review not found');
       }
 
+      /*
+       * 2. Only PENDING reviews can be approved.
+       */
       if (review.review.status !== 'PENDING') {
         throw new ConflictException(
           `Review has already been ${review.review.status.toLowerCase()}`,
@@ -131,13 +135,14 @@ export class ReviewsService {
       }
 
       /*
-       * ONLY NOW do we update the real property.
-       *
-       * Reviewer approval is the point where the proposed
-       * values become the actual property values.
+       * 3. Read the proposed property values.
        */
       const proposedValues = review.review.newValues as Record<string, unknown>;
 
+      /*
+       * 4. Only these fields are allowed to be
+       *    written to the properties table.
+       */
       const allowedFields = [
         'address',
         'city',
@@ -160,6 +165,9 @@ export class ReviewsService {
         'status',
       ] as const;
 
+      /*
+       * 5. Build the actual property update.
+       */
       const propertyUpdate: Record<string, unknown> = {};
 
       for (const field of allowedFields) {
@@ -172,6 +180,12 @@ export class ReviewsService {
         throw new ConflictException('Review contains no property changes');
       }
 
+      /*
+       * 6. Update the real property.
+       *
+       * This happens ONLY because the reviewer approved
+       * the pending proposal.
+       */
       const [updatedProperty] = await tx
         .update(properties)
         .set({
@@ -186,8 +200,64 @@ export class ReviewsService {
       }
 
       /*
-       * Mark the review as APPROVED only after the
-       * property update succeeds.
+       * 7. Build a precise audit record.
+       *
+       * Only fields whose values actually changed are
+       * included in the audit log.
+       */
+      const oldValues = review.review.oldValues as Record<string, unknown>;
+
+      const newValues = review.review.newValues as Record<string, unknown>;
+
+      const changedFields: string[] = [];
+
+      const auditOldValues: Record<string, unknown> = {};
+
+      const auditNewValues: Record<string, unknown> = {};
+
+      for (const field of allowedFields) {
+        const oldValue = oldValues[field];
+        const newValue = newValues[field];
+
+        if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+          changedFields.push(field);
+          auditOldValues[field] = oldValue;
+          auditNewValues[field] = newValue;
+        }
+      }
+
+      /*
+       * There should always be at least one changed field
+       * for a valid review.
+       */
+      if (changedFields.length === 0) {
+        throw new ConflictException(
+          'Review contains no actual property changes',
+        );
+      }
+
+      /*
+       * 8. Record the APPROVED change in the audit log.
+       *
+       * Example:
+       *
+       * changedFields = ["bedrooms"]
+       * oldValues     = { bedrooms: 5 }
+       * newValues     = { bedrooms: 6 }
+       */
+      await tx.insert(auditLogs).values({
+        propertyId: review.propertyId,
+        userId: reviewerId,
+        changedFields,
+        oldValues: auditOldValues,
+        newValues: auditNewValues,
+      });
+
+      /*
+       * 9. Mark the review as APPROVED.
+       *
+       * The property update, audit log and review status
+       * all happen inside the same transaction.
        */
       const [updatedReview] = await tx
         .update(propertyReviews)
@@ -249,6 +319,9 @@ export class ReviewsService {
     const db = this.databaseService.db;
 
     return db.transaction(async (tx) => {
+      /*
+       * 1. Find the review.
+       */
       const [review] = await tx
         .select()
         .from(propertyReviews)
@@ -259,6 +332,10 @@ export class ReviewsService {
         throw new NotFoundException('Review not found');
       }
 
+      /*
+       * 2. Only PENDING reviews can be rejected
+       *    or returned.
+       */
       if (review.status !== 'PENDING') {
         throw new ConflictException(
           `Review has already been ${review.status.toLowerCase()}`,
@@ -266,7 +343,8 @@ export class ReviewsService {
       }
 
       /*
-       * REJECT and RETURN never touch the properties table.
+       * 3. REJECT and RETURN do NOT modify the
+       *    actual properties table.
        */
       const [updatedReview] = await tx
         .update(propertyReviews)

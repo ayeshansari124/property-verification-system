@@ -16,7 +16,6 @@ import {
   assignments,
   properties,
   propertyReviews,
-  auditLogs,
 } from '../database/schema';
 
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -108,7 +107,9 @@ export class AssignmentsService {
    *
    * IMPORTANT:
    * The actual properties table is NOT modified here.
-   * The proposed change is stored in propertyReviews.newValues.
+   *
+   * The proposed values are stored in propertyReviews.newValues
+   * and must be approved by a reviewer before becoming real.
    */
   async updateProperty(
     assignmentId: string,
@@ -167,7 +168,7 @@ export class AssignmentsService {
       /*
        * 3. Get the CURRENT property.
        *
-       * This becomes our oldValues snapshot.
+       * This becomes the oldValues snapshot.
        */
       const [existingProperty] = await tx
         .select()
@@ -184,8 +185,8 @@ export class AssignmentsService {
       /*
        * 4. Build the proposed property.
        *
-       * Start with the current property and apply only
-       * fields supplied by the checker.
+       * The current property is copied and only the fields
+       * supplied by the checker are changed in memory.
        *
        * This is NOT written to the properties table.
        */
@@ -229,8 +230,11 @@ export class AssignmentsService {
       }
 
       /*
-       * 5. Prevent multiple pending changes for the same
+       * 5. Prevent multiple PENDING reviews for the same
        *    assignment-property.
+       *
+       * RETURNED and REJECTED reviews do not block a new
+       * proposal. This allows the checker to resubmit.
        */
       const [existingPendingReview] = await tx
         .select({
@@ -252,12 +256,13 @@ export class AssignmentsService {
       }
 
       /*
-       * 6. Create the review proposal.
+       * 6. Create a NEW review.
        *
-       * This is the key difference from the old implementation:
+       * This works for:
        *
-       * properties table = UNCHANGED
-       * propertyReviews.newValues = proposed change
+       * - first submission
+       * - resubmission after RETURNED
+       * - another proposal after REJECTED
        */
       const [review] = await tx
         .insert(propertyReviews)
@@ -272,15 +277,13 @@ export class AssignmentsService {
         .returning();
 
       /*
-       * 7. Record the proposed change in the audit log.
+       * IMPORTANT:
+       *
+       * We intentionally DO NOT create an audit log here.
+       *
+       * audit_logs represents actual property changes.
+       * The actual property only changes after reviewer approval.
        */
-      await tx.insert(auditLogs).values({
-        propertyId,
-        userId: checkerId,
-        changedFields,
-        oldValues,
-        newValues,
-      });
 
       return {
         assignmentId,
@@ -307,6 +310,9 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment not found');
     }
 
+    /*
+     * Data Checkers can only view assignments assigned to them.
+     */
     if (userRole === 'DATA_CHECKER' && assignment.checkerId !== userId) {
       throw new ForbiddenException('You are not assigned to this assignment');
     }
