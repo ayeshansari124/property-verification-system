@@ -4,8 +4,9 @@ import {
   Get,
   Param,
   Patch,
-  UseGuards,
+  Query,
   Request,
+  UseGuards,
 } from '@nestjs/common';
 
 import { JwtGuard } from '../auth/jwt.guard';
@@ -19,18 +20,51 @@ import { ReviewsService } from './reviews.service';
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
+  /**
+   * Get pending reviews for the reviewer queue.
+   *
+   * Supports:
+   *
+   * GET /reviews/pending
+   * GET /reviews/pending?page=1&limit=20
+   * GET /reviews/pending?search=Maple
+   * GET /reviews/pending?city=Austin
+   * GET /reviews/pending?state=Texas
+   * GET /reviews/pending?page=1&limit=10&search=Maple&city=Austin
+   */
   @Get('pending')
   @Roles('REVIEWER')
-  async getPendingReviews() {
-    return this.reviewsService.getPendingReviews();
+  async getPendingReviews(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('city') city?: string,
+    @Query('state') state?: string,
+  ) {
+    return this.reviewsService.getPendingReviews(
+      Number(page) || 1,
+      Number(limit) || 20,
+      search,
+      city,
+      state,
+    );
   }
 
+  /**
+   * Get one review with its old and proposed values.
+   */
   @Get(':id')
   @Roles('REVIEWER')
   async findOne(@Param('id') reviewId: string) {
     return this.reviewsService.findOne(reviewId);
   }
 
+  /**
+   * Approve a pending review.
+   *
+   * Reviewer approval applies the proposed values
+   * to the master property.
+   */
   @Patch(':id/approve')
   @Roles('REVIEWER')
   async approve(
@@ -45,6 +79,11 @@ export class ReviewsController {
     );
   }
 
+  /**
+   * Reject a pending review.
+   *
+   * The master property is NOT changed.
+   */
   @Patch(':id/reject')
   @Roles('REVIEWER')
   async reject(
@@ -59,6 +98,11 @@ export class ReviewsController {
     );
   }
 
+  /**
+   * Return a pending review to the checker.
+   *
+   * The master property is NOT changed.
+   */
   @Patch(':id/return')
   @Roles('REVIEWER')
   async returnToChecker(
