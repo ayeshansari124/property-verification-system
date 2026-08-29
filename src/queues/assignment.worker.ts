@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
@@ -8,8 +8,9 @@ import { DatabaseService } from '../database/database.service';
 import { assignments } from '../database/schema';
 
 @Injectable()
-export class AssignmentWorker implements OnModuleInit {
-  private worker: Worker;
+export class AssignmentWorker implements OnModuleInit, OnModuleDestroy {
+  private worker?: Worker;
+  private connection?: IORedis;
 
   constructor(
     private readonly configService: ConfigService,
@@ -17,7 +18,7 @@ export class AssignmentWorker implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    const connection = new IORedis({
+    this.connection = new IORedis({
       host: this.configService.getOrThrow<string>('REDIS_HOST'),
       port: this.configService.getOrThrow<number>('REDIS_PORT'),
       maxRetriesPerRequest: null,
@@ -45,8 +46,6 @@ export class AssignmentWorker implements OnModuleInit {
             throw new Error(`Assignment ${assignmentId} not found`);
           }
 
-          // Mock estimation:
-          // 5 minutes of verification work per property.
           const estimatedCompletionMinutes = assignment.totalProperties * 5;
 
           await this.databaseService.db
@@ -65,7 +64,7 @@ export class AssignmentWorker implements OnModuleInit {
         }
       },
       {
-        connection,
+        connection: this.connection,
       },
     );
 
@@ -76,5 +75,15 @@ export class AssignmentWorker implements OnModuleInit {
     this.worker.on('failed', (job, error) => {
       console.error(`Assignment job ${job?.id} failed:`, error);
     });
+  }
+
+  async onModuleDestroy() {
+    if (this.worker) {
+      await this.worker.close();
+    }
+
+    if (this.connection) {
+      await this.connection.quit();
+    }
   }
 }
