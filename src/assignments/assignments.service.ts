@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { and, eq, inArray, not } from 'drizzle-orm';
+import { and, asc, count, eq, inArray } from 'drizzle-orm';
 
 import { AssignmentQueue } from '../queues/assignment.queue';
 import { DatabaseService } from '../database/database.service';
@@ -533,6 +533,61 @@ export class AssignmentsService {
     }
 
     return completedAssignment;
+  }
+  // ============================================================
+  // FIND ALL
+  // ============================================================
+
+  /**
+   * Get paginated assignments.
+   *
+   * ADMIN, DATA_CHECKER and REVIEWER can view assignments.
+   */
+  async findAll(page = 1, limit = 20, status?: string) {
+    const db = this.databaseService.db;
+
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+    const offset = (safePage - 1) * safeLimit;
+
+    const conditions: ReturnType<typeof eq>[] = [];
+
+    if (status?.trim()) {
+      conditions.push(eq(assignments.status, status.trim() as any));
+    }
+
+    const whereCondition =
+      conditions.length > 0 ? and(...conditions) : undefined;
+
+    const data = await db
+      .select()
+      .from(assignments)
+      .where(whereCondition)
+      .orderBy(asc(assignments.createdAt))
+      .limit(safeLimit)
+      .offset(offset);
+
+    const [totalResult] = await db
+      .select({
+        count: count(),
+      })
+      .from(assignments)
+      .where(whereCondition);
+
+    const total = Number(totalResult?.count ?? 0);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / safeLimit);
+
+    return {
+      data,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        totalPages,
+        hasNextPage: safePage < totalPages,
+        hasPreviousPage: safePage > 1,
+      },
+    };
   }
 
   // ============================================================

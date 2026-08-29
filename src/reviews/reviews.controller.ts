@@ -12,7 +12,6 @@ import {
 import { JwtGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-
 import { ReviewsService } from './reviews.service';
 
 @Controller('reviews')
@@ -21,16 +20,32 @@ export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
   /**
-   * Get pending reviews for the reviewer queue.
+   * REVIEWER - view pending reviews.
    *
-   * Supports:
+   * GET /reviews
+   */
+  @Get()
+  @Roles('REVIEWER')
+  async getReviews(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('city') city?: string,
+    @Query('state') state?: string,
+  ) {
+    return this.reviewsService.getPendingReviews(
+      Number(page) || 1,
+      Number(limit) || 20,
+      search,
+      city,
+      state,
+    );
+  }
+
+  /**
+   * Backwards-compatible pending reviews route.
    *
    * GET /reviews/pending
-   * GET /reviews/pending?page=1&limit=20
-   * GET /reviews/pending?search=Maple
-   * GET /reviews/pending?city=Austin
-   * GET /reviews/pending?state=Texas
-   * GET /reviews/pending?page=1&limit=10&search=Maple&city=Austin
    */
   @Get('pending')
   @Roles('REVIEWER')
@@ -50,21 +65,12 @@ export class ReviewsController {
     );
   }
 
-  /**
-   * Get one review with its old and proposed values.
-   */
   @Get(':id')
   @Roles('REVIEWER')
   async findOne(@Param('id') reviewId: string) {
     return this.reviewsService.findOne(reviewId);
   }
 
-  /**
-   * Approve a pending review.
-   *
-   * Reviewer approval applies the proposed values
-   * to the master property.
-   */
   @Patch(':id/approve')
   @Roles('REVIEWER')
   async approve(
@@ -79,11 +85,6 @@ export class ReviewsController {
     );
   }
 
-  /**
-   * Reject a pending review.
-   *
-   * The master property is NOT changed.
-   */
   @Patch(':id/reject')
   @Roles('REVIEWER')
   async reject(
@@ -98,11 +99,6 @@ export class ReviewsController {
     );
   }
 
-  /**
-   * Return a pending review to the checker.
-   *
-   * The master property is NOT changed.
-   */
   @Patch(':id/return')
   @Roles('REVIEWER')
   async returnToChecker(
