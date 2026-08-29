@@ -6,6 +6,7 @@ import {
 import { and, asc, count, eq, ilike, or } from 'drizzle-orm';
 
 import { DatabaseService } from '../database/database.service';
+import { SearchQueue } from '../queues/search.queue';
 
 import {
   assignmentProperties,
@@ -17,29 +18,11 @@ import {
 
 @Injectable()
 export class ReviewsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly searchQueue: SearchQueue,
+  ) {}
 
-  /*
-   * ============================================================
-   * GET PENDING REVIEWS
-   * ============================================================
-   *
-   * Supports:
-   *
-   * GET /reviews/pending
-   * GET /reviews/pending?page=1&limit=20
-   * GET /reviews/pending?search=Maple
-   * GET /reviews/pending?city=Austin
-   * GET /reviews/pending?state=Texas
-   *
-   * Search checks:
-   * - address
-   * - city
-   * - state
-   * - zip
-   * - property type
-   * - assignment name
-   */
   async getPendingReviews(
     page = 1,
     limit = 20,
@@ -49,25 +32,12 @@ export class ReviewsService {
   ) {
     const db = this.databaseService.db;
 
-    /*
-     * Protect the API from invalid pagination values.
-     */
     const safePage = Math.max(1, Number(page) || 1);
-
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
-
     const offset = (safePage - 1) * safeLimit;
 
-    /*
-     * Base condition:
-     *
-     * Only PENDING reviews belong in the reviewer queue.
-     */
     const conditions = [eq(propertyReviews.status, 'PENDING')];
 
-    /*
-     * Optional free-text search.
-     */
     if (search?.trim()) {
       const searchValue = `%${search.trim()}%`;
 
@@ -83,25 +53,16 @@ export class ReviewsService {
       );
     }
 
-    /*
-     * Optional city filter.
-     */
     if (city?.trim()) {
       conditions.push(ilike(properties.city, `%${city.trim()}%`));
     }
 
-    /*
-     * Optional state filter.
-     */
     if (state?.trim()) {
       conditions.push(ilike(properties.state, `%${state.trim()}%`));
     }
 
     const whereCondition = and(...conditions);
 
-    /*
-     * Fetch page.
-     */
     const reviews = await db
       .select({
         reviewId: propertyReviews.id,
@@ -139,9 +100,6 @@ export class ReviewsService {
       .limit(safeLimit)
       .offset(offset);
 
-    /*
-     * Count all matching reviews.
-     */
     const [totalResult] = await db
       .select({
         count: count(),
@@ -159,12 +117,10 @@ export class ReviewsService {
       .where(whereCondition);
 
     const total = Number(totalResult?.count ?? 0);
-
     const totalPages = total === 0 ? 0 : Math.ceil(total / safeLimit);
 
     return {
       data: reviews,
-
       pagination: {
         page: safePage,
         limit: safeLimit,
@@ -176,11 +132,6 @@ export class ReviewsService {
     };
   }
 
-  /*
-   * ============================================================
-   * GET ONE REVIEW
-   * ============================================================
-   */
   async findOne(reviewId: string) {
     const db = this.databaseService.db;
 
@@ -188,24 +139,17 @@ export class ReviewsService {
       .select({
         reviewId: propertyReviews.id,
         assignmentPropertyId: propertyReviews.assignmentPropertyId,
-
         checkerId: propertyReviews.checkerId,
         reviewerId: propertyReviews.reviewerId,
-
         checkerNotes: propertyReviews.checkerNotes,
         reviewerNotes: propertyReviews.reviewerNotes,
-
         status: propertyReviews.status,
-
         oldValues: propertyReviews.oldValues,
         newValues: propertyReviews.newValues,
-
         createdAt: propertyReviews.createdAt,
         reviewedAt: propertyReviews.reviewedAt,
-
         assignmentId: assignments.id,
         assignmentName: assignments.name,
-
         propertyId: properties.id,
       })
       .from(propertyReviews)
@@ -228,21 +172,10 @@ export class ReviewsService {
     return review;
   }
 
-  /*
-   * ============================================================
-   * APPROVE
-   * ============================================================
-   *
-   * PENDING
-   *    ↓
-   * APPROVED
-   *
-   * Only here does the real property change.
-   */
   async approve(reviewId: string, reviewerId: string, reviewerNotes?: string) {
     const db = this.databaseService.db;
 
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [review] = await tx
         .select({
           review: propertyReviews,
@@ -294,27 +227,18 @@ export class ReviewsService {
       ] as const;
 
       const propertyUpdate: Record<string, unknown> = {};
-
       const changedFields: string[] = [];
-
       const auditOldValues: Record<string, unknown> = {};
-
       const auditNewValues: Record<string, unknown> = {};
 
-      /*
-       * Determine the ACTUAL changed fields.
-       */
       for (const field of allowedFields) {
         const oldValue = oldValues[field];
         const newValue = proposedValues[field];
 
         if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
           changedFields.push(field);
-
           propertyUpdate[field] = newValue;
-
           auditOldValues[field] = oldValue;
-
           auditNewValues[field] = newValue;
         }
       }
@@ -325,9 +249,6 @@ export class ReviewsService {
         );
       }
 
-      /*
-       * Update master property.
-       */
       const [updatedProperty] = await tx
         .update(properties)
         .set({
@@ -341,9 +262,6 @@ export class ReviewsService {
         throw new NotFoundException('Property not found');
       }
 
-      /*
-       * Record actual approved change.
-       */
       await tx.insert(auditLogs).values({
         propertyId: review.propertyId,
         userId: reviewerId,
@@ -352,9 +270,6 @@ export class ReviewsService {
         newValues: auditNewValues,
       });
 
-      /*
-       * Mark review approved.
-       */
       const [updatedReview] = await tx
         .update(propertyReviews)
         .set({
@@ -380,15 +295,20 @@ export class ReviewsService {
       return {
         review: updatedReview,
         property: updatedProperty,
+        propertyId: review.propertyId,
       };
     });
+
+    // Transaction has successfully committed.
+    // Only now enqueue external verification.
+    await this.searchQueue.addPropertyVerificationJob(result.propertyId);
+
+    return {
+      review: result.review,
+      property: result.property,
+    };
   }
 
-  /*
-   * ============================================================
-   * REJECT
-   * ============================================================
-   */
   async reject(reviewId: string, reviewerId: string, reviewerNotes?: string) {
     return this.processWithoutPropertyChange(
       reviewId,
@@ -398,11 +318,6 @@ export class ReviewsService {
     );
   }
 
-  /*
-   * ============================================================
-   * RETURN TO CHECKER
-   * ============================================================
-   */
   async returnToChecker(
     reviewId: string,
     reviewerId: string,
@@ -416,13 +331,6 @@ export class ReviewsService {
     );
   }
 
-  /*
-   * ============================================================
-   * REJECT / RETURN HELPER
-   * ============================================================
-   *
-   * Neither action changes the master property.
-   */
   private async processWithoutPropertyChange(
     reviewId: string,
     reviewerId: string,
