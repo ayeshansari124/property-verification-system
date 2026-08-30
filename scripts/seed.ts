@@ -244,9 +244,7 @@ const propertiesToSeed = [
 
 async function seed() {
   try {
-    // -------------------------
-    // ADMIN
-    // -------------------------
+   //ADMIN
 
     const adminPassword = await bcrypt.hash('Admin@123', 10);
 
@@ -269,9 +267,7 @@ async function seed() {
       console.log('Admin user already exists.');
     }
 
-    // -------------------------
-    // DATA CHECKER
-    // -------------------------
+    //DATA CHECKER
 
     const checkerPassword = await bcrypt.hash('Checker@123', 10);
 
@@ -294,9 +290,7 @@ async function seed() {
       console.log('Data Checker already exists.');
     }
 
-    // -------------------------
-    // REVIEWER
-    // -------------------------
+    //REVIEWER
 
     const reviewerPassword = await bcrypt.hash('Reviewer@123', 10);
 
@@ -319,9 +313,7 @@ async function seed() {
       console.log('Reviewer already exists.');
     }
 
-    // -------------------------
-    // PROPERTIES
-    // -------------------------
+   //PROPERTIES
 
     const existingProperties = await db.select().from(properties);
 
