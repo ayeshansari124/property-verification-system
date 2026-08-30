@@ -1,98 +1,201 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# PropertyVerify - Property Data Verification & Enrichment System
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+PropertyVerify is a backend service for managing the verification and enrichment of residential property records. It provides secure Admin, Data Checker, and Reviewer workflows for assignment management, property verification, review, approval, audit tracking, and background processing.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## Project Demo
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### Demo Video
 
-## Project setup
+[▶️ Watch the Project Demo](YOUR_VIDEO_LINK_HERE)
 
-```bash
-$ npm install
-```
+The demo covers:
 
-## Compile and run the project
+- JWT authentication and role-based authorization
+- Admin assignment creation
+- Data Checker assignment claiming
+- Property verification and updates
+- Reviewer approval workflow
+- Master property updates
+- Audit history
+- BullMQ and Redis background processing
+- Swagger API documentation
+- Pagination and filtering
+- Database and scalability considerations
 
-```bash
-# development
-$ npm run start
+---
 
-# watch mode
-$ npm run start:dev
+# Tech Stack
+## Backend
+NestJS
+TypeScript
+REST APIs
+## Database
+PostgreSQL
+Drizzle ORM
+## Authentication
+JWT
+Passport
+bcrypt
+Role-Based Access Control
+## Background Processing
+BullMQ
+Redis
+ioredis
+## Validation & Testing
+class-validator
+Jest
+Supertest
+## API Documentation
+Swagger / OpenAPI
+## Infrastructure
+Docker
+Docker Compose
 
-# production mode
-$ npm run start:prod
-```
+---
 
-## Run tests
+## Features
 
-```bash
-# unit tests
-$ npm run test
+### Authentication & Authorization
 
-# e2e tests
-$ npm run test:e2e
+- JWT authentication
+- Role-Based Access Control (RBAC)
+- Admin, Data Checker, and Reviewer roles
+- Protected REST APIs
+- Password hashing with bcrypt
+- Request validation with `class-validator`
 
-# test coverage
-$ npm run test:cov
-```
+### Admin
 
-## Deployment
+- Create verification assignments
+- Assign multiple properties
+- View assignments and assignment details
+- Pagination and status filtering
+- Assignment statistics
+- Completion time estimation
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+### Data Checker
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+- Claim open assignments
+- Atomic assignment claiming
+- Start assignments
+- View assigned properties
+- Propose property updates
+- Track changed fields
+- Submit assignments for review
+- Prevent modification after submission
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+### Reviewer
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+- View pending reviews
+- View review details
+- Compare original and proposed values
+- Approve changes
+- Reject changes
+- Return changes for correction
+- Add reviewer notes
+- Prevent duplicate review decisions
+- Update master property data only after approval
 
-## Resources
+### Audit History
 
-Check out a few resources that may come in handy when working with NestJS:
+Every property modification records:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+- User
+- Timestamp
+- Changed fields
+- Old values
+- New values
 
-## Support
+### Background Processing
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+BullMQ and Redis handle asynchronous processing for:
 
-## Stay in touch
+- Assignment statistics
+- Completion time estimation
+- Property search/verification
+- Confidence score generation
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
-## License
+###  Architecture
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+The application follows a layered NestJS architecture separating controllers, business services, authentication, database access, queues, workers, and review workflows.
+
+---
+
+### Database Design
+
+Main entities:
+
+Users
+Properties
+Assignments
+Assignment Properties
+Property Reviews
+Audit Logs
+
+The properties table contains the latest approved property information.
+
+Checker changes are stored separately as review proposals containing the original and proposed values. The master property is updated only after reviewer approval.
+
+This prevents unapproved changes from directly modifying master data.
+
+---
+### Business Rules
+
+Only Admin users can create assignments.
+Only Data Checkers can claim assignments.
+An assignment can only be claimed once.
+Assignment claiming is atomic to prevent race conditions.
+Only the assigned checker can work on an assignment.
+Submitted and completed assignments cannot be modified by the checker.
+Reviewers can approve, reject, or return proposed changes.
+A review cannot be approved or rejected twice.
+The master property is updated only after approval.
+Rejected changes do not modify the master property.
+Property modifications are recorded in audit history.
+Business-critical writes use database transactions where appropriate.
+
+---
+### Scalability
+
+The system is designed with 1M+ property records in mind.
+
+Database
+PostgreSQL for relational data
+Database-side pagination and filtering
+Indexing for frequently queried fields
+Connection pooling
+Separate master and audit data
+Potential partitioning for large audit tables
+Background Processing
+
+Verification work is handled asynchronously using BullMQ and Redis rather than blocking API requests.
+
+Workers can be scaled independently as workload increases.
+
+For a larger production deployment, database replicas, partitioning, caching, monitoring, and additional queue workers could be introduced based on actual workload requirements.
+
+---
+
+### Key Engineering Decisions
+Master property data is isolated from proposed changes.
+Reviewer approval is required before updating master data.
+Original and proposed values are preserved during review.
+Audit history provides a complete change trail.
+Assignment claiming is protected against concurrent claims.
+Background processing is separated from synchronous API operations.
+JWT and role guards provide centralized access control.
+Pagination prevents unbounded data retrieval.
+BullMQ workers can scale independently.
+Transactions are used where consistency across multiple writes is required.
+
+---
+
+### Author
+
+## Ayesha Ansari
+
+## Backend Developer Assignment - Property Data Verification & Enrichment System
