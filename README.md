@@ -28,30 +28,30 @@ The demo covers:
 
 # Tech Stack
 ## Backend
-NestJS
-TypeScript
-REST APIs
+- NestJS
+- TypeScript
+- REST APIs
 ## Database
-PostgreSQL
-Drizzle ORM
+- PostgreSQL
+- Drizzle ORM
 ## Authentication
-JWT
-Passport
-bcrypt
-Role-Based Access Control
+- JWT
+- Passport
+- bcrypt
+- Role-Based Access Control
 ## Background Processing
-BullMQ
-Redis
-ioredis
+- BullMQ
+- Redis
+- ioredis
 ## Validation & Testing
-class-validator
-Jest
-Supertest
+- class-validator
+- Jest
+- Supertest
 ## API Documentation
-Swagger / OpenAPI
+- Swagger / OpenAPI
 ## Infrastructure
-Docker
-Docker Compose
+- Docker
+- Docker Compose
 
 ---
 
@@ -129,12 +129,12 @@ The application follows a layered NestJS architecture separating controllers, bu
 
 Main entities:
 
-Users
-Properties
-Assignments
-Assignment Properties
-Property Reviews
-Audit Logs
+- Users
+- Properties
+- Assignments
+- Assignment Properties
+- Property Reviews
+- Audit Logs
 
 The properties table contains the latest approved property information.
 
@@ -145,32 +145,31 @@ This prevents unapproved changes from directly modifying master data.
 ---
 ### Business Rules
 
-Only Admin users can create assignments.
-Only Data Checkers can claim assignments.
-An assignment can only be claimed once.
-Assignment claiming is atomic to prevent race conditions.
-Only the assigned checker can work on an assignment.
-Submitted and completed assignments cannot be modified by the checker.
-Reviewers can approve, reject, or return proposed changes.
-A review cannot be approved or rejected twice.
-The master property is updated only after approval.
-Rejected changes do not modify the master property.
-Property modifications are recorded in audit history.
-Business-critical writes use database transactions where appropriate.
+- Only Admin users can create assignments.
+- Only Data Checkers can claim assignments.
+- An assignment can only be claimed once.
+- Assignment claiming is atomic to prevent race conditions.
+- Only the assigned checker can work on an assignment.
+- Submitted and completed assignments cannot be modified by the checker.
+- Reviewers can approve, reject, or return proposed changes.
+- A review cannot be approved or rejected twice.
+- The master property is updated only after approval.
+- Rejected changes do not modify the master property.
+- Property modifications are recorded in audit history.
+- Business-critical writes use database transactions where appropriate.
 
 ---
 ### Scalability
 
 The system is designed with 1M+ property records in mind.
 
-Database
-PostgreSQL for relational data
-Database-side pagination and filtering
-Indexing for frequently queried fields
-Connection pooling
-Separate master and audit data
-Potential partitioning for large audit tables
-Background Processing
+- Database-side pagination and filtering
+- Indexing for frequently queried fields
+- PostgreSQL for relational data
+- Connection pooling
+- Separate master and audit data
+- Potential partitioning for large audit tables
+- Background Processing
 
 Verification work is handled asynchronously using BullMQ and Redis rather than blocking API requests.
 
@@ -181,16 +180,17 @@ For a larger production deployment, database replicas, partitioning, caching, mo
 ---
 
 ### Key Engineering Decisions
-Master property data is isolated from proposed changes.
-Reviewer approval is required before updating master data.
-Original and proposed values are preserved during review.
-Audit history provides a complete change trail.
-Assignment claiming is protected against concurrent claims.
-Background processing is separated from synchronous API operations.
-JWT and role guards provide centralized access control.
-Pagination prevents unbounded data retrieval.
-BullMQ workers can scale independently.
-Transactions are used where consistency across multiple writes is required.
+
+- Master property data is isolated from proposed changes.
+- Reviewer approval is required before updating master data.
+- Original and proposed values are preserved during review.
+- Audit history provides a complete change trail.
+- Assignment claiming is protected against concurrent claims.
+- Background processing is separated from synchronous API operations.
+- JWT and role guards provide centralized access control.
+- Pagination prevents unbounded data retrieval.
+- BullMQ workers can scale independently.
+- Transactions are used where consistency across multiple writes is required.
 
 ---
 
