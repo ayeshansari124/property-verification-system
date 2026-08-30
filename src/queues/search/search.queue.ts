@@ -3,8 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 
+import { SEARCH_JOB_NAMES, SEARCH_QUEUE_NAME } from './search-queue.constants';
+
 @Injectable()
-export class AssignmentQueue implements OnModuleDestroy {
+export class SearchQueue implements OnModuleDestroy {
   private readonly queue: Queue;
   private readonly connection: IORedis;
 
@@ -15,19 +17,22 @@ export class AssignmentQueue implements OnModuleDestroy {
       maxRetriesPerRequest: null,
     });
 
-    this.queue = new Queue('assignment-queue', {
+    this.queue = new Queue(SEARCH_QUEUE_NAME, {
       connection: this.connection,
     });
   }
 
-  async addAssignmentStatsJob(assignmentId: string) {
+  /**
+   * Enqueued whenever a property is modified (review approval,
+   * or a direct admin edit). Simulates external AI/search
+   * verification of the new values.
+   */
+  async addPropertyVerificationJob(propertyId: string) {
     await this.queue.add(
-      'calculate-assignment-stats',
+      SEARCH_JOB_NAMES.VERIFY_PROPERTY,
+      { propertyId },
       {
-        assignmentId,
-      },
-      {
-        jobId: `assignment-stats-${assignmentId}`,
+        jobId: `property-verification-${propertyId}`,
         removeOnComplete: true,
         removeOnFail: false,
       },

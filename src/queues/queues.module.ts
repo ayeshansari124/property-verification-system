@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
 
-import { AssignmentQueue } from './assignment.queue';
-import { AssignmentWorker } from './assignment.worker';
-import { SearchQueue } from './search.queue';
-import { SearchWorker } from './search.worker';
+import { DatabaseModule } from '../database/database.module';
+
+import { AssignmentQueue } from './assignment/assignment.queue';
+import { AssignmentWorker } from './assignment/assignment.worker';
+import { SearchQueue } from './search/search.queue';
+import { SearchWorker } from './search/search.worker';
 
 @Module({
+  imports: [DatabaseModule],
   providers: [AssignmentQueue, AssignmentWorker, SearchQueue, SearchWorker],
   exports: [AssignmentQueue, SearchQueue],
 })

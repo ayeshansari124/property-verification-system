@@ -14,10 +14,13 @@ import { JwtGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { AssignmentsService } from './assignments.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
-import { UpdatePropertyDto } from './dto/update-property.dto';
+import { AssignmentQueryDto } from './dto/assignment-query.dto';
+import { UpdatePropertyDto } from '../properties/dto/update-property.dto';
 
+@ApiBearerAuth()
 @Controller('assignments')
 @UseGuards(JwtGuard, RolesGuard)
 export class AssignmentsController {
@@ -31,15 +34,11 @@ export class AssignmentsController {
 
   @Get()
   @Roles('ADMIN', 'DATA_CHECKER', 'REVIEWER')
-  async findAll(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('status') status?: string,
-  ) {
+  async findAll(@Query() query: AssignmentQueryDto) {
     return this.assignmentsService.findAll(
-      Number(page) || 1,
-      Number(limit) || 20,
-      status,
+      query.page ?? 1,
+      query.limit ?? 20,
+      query.status,
     );
   }
 

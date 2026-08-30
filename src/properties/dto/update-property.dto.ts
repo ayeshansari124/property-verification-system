@@ -8,6 +8,18 @@ import {
   Min,
 } from 'class-validator';
 
+/**
+ * Partial set of editable Property fields.
+ *
+ * Used by:
+ *  - PATCH /assignments/:assignmentId/properties/:propertyId
+ *    (Data Checker proposes a change -> creates a Property Review)
+ *  - PUT /properties/:id
+ *    (Admin direct override -> updates the master record immediately)
+ *
+ * Keep this in sync with EDITABLE_PROPERTY_FIELDS in
+ * common/utils/property-fields.util.ts.
+ */
 export class UpdatePropertyDto {
   @IsOptional()
   @IsString()

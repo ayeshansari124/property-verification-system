@@ -6,6 +6,9 @@ import { AuthModule } from './auth/auth.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { QueuesModule } from './queues/queues.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { PropertiesModule } from './properties/properties.module';
+import { AuditModule } from './audit/audit.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -16,8 +19,10 @@ import { ReviewsModule } from './reviews/reviews.module';
 
     AuthModule,
 
-    AssignmentsModule,
     QueuesModule,
+    PropertiesModule,
+    AuditModule,
+    AssignmentsModule,
     ReviewsModule,
   ],
 })

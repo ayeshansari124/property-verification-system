@@ -40,6 +40,16 @@ describe('Application (e2e)', () => {
   });
 
   it('should reject unauthenticated access to pending reviews', async () => {
-    await request(app.getHttpServer()).get('/reviews/pending').expect(401);
+    await request(app.getHttpServer()).get('/reviews').expect(401);
+  });
+
+  it('should reject unauthenticated access to the properties list', async () => {
+    await request(app.getHttpServer()).get('/properties').expect(401);
+  });
+
+  it('should reject unauthenticated access to property history', async () => {
+    await request(app.getHttpServer())
+      .get('/properties/315f4e5e-4bb9-48f8-baf3-98a0d2380927/history')
+      .expect(401);
   });
 });

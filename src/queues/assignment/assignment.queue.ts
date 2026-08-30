@@ -3,8 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 
+import {
+  ASSIGNMENT_JOB_NAMES,
+  ASSIGNMENT_QUEUE_NAME,
+} from './assignment-queue.constants';
+
 @Injectable()
-export class SearchQueue implements OnModuleDestroy {
+export class AssignmentQueue implements OnModuleDestroy {
   private readonly queue: Queue;
   private readonly connection: IORedis;
 
@@ -15,19 +20,21 @@ export class SearchQueue implements OnModuleDestroy {
       maxRetriesPerRequest: null,
     });
 
-    this.queue = new Queue('search-queue', {
+    this.queue = new Queue(ASSIGNMENT_QUEUE_NAME, {
       connection: this.connection,
     });
   }
 
-  async addPropertyVerificationJob(propertyId: string) {
+  /**
+   * Enqueued whenever an assignment is created.
+   * Generates statistics (total properties, estimated completion time).
+   */
+  async addAssignmentStatsJob(assignmentId: string) {
     await this.queue.add(
-      'verify-property',
+      ASSIGNMENT_JOB_NAMES.CALCULATE_STATS,
+      { assignmentId },
       {
-        propertyId,
-      },
-      {
-        jobId: `property-verification-${propertyId}`,
+        jobId: `assignment-stats-${assignmentId}`,
         removeOnComplete: true,
         removeOnFail: false,
       },
