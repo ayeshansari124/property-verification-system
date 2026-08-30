@@ -17,14 +17,7 @@ export interface CreateAuditLogInput {
 export class AuditRepository {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  /**
-   * Records one immutable audit entry.
-   *
-   * Accepts an executor so callers can run this inside
-   * the same transaction as the property update it documents -
-   * nothing should ever be overwritten without history, and
-   * that guarantee only holds if both writes commit together.
-   */
+  //  Records one immutable audit entry.
   async insert(executor: DbExecutor, input: CreateAuditLogInput) {
     const [entry] = await executor
       .insert(auditLogs)

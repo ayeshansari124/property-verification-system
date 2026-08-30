@@ -13,14 +13,7 @@ import { AuditRepository, CreateAuditLogInput } from './audit.repository';
 export class AuditService {
   constructor(private readonly auditRepository: AuditRepository) {}
 
-  /**
-   * Records a property change.
-   *
-   * Callers (ReviewsService on approval, PropertiesService on a
-   * direct admin edit) pass the active transaction so the audit
-   * entry and the property update commit atomically - nothing
-   * should ever be overwritten without history.
-   */
+//  Records a property change.
   async recordChange(executor: DbExecutor, input: CreateAuditLogInput) {
     return this.auditRepository.insert(executor, input);
   }

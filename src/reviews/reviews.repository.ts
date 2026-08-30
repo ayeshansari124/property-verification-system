@@ -68,11 +68,6 @@ export class ReviewsRepository {
     return review;
   }
 
-  /**
-   * Counts PENDING reviews for an assignment. Used to enforce
-   * "an assignment cannot be submitted while any property still
-   * has a PENDING review".
-   */
   async countPendingByAssignmentId(executor: DbExecutor, assignmentId: string) {
     const [result] = await executor
       .select({ count: count() })
@@ -217,10 +212,6 @@ export class ReviewsRepository {
     return review;
   }
 
-  /**
-   * Loads a review together with its target property id, for use
-   * inside the approval transaction.
-   */
   async findForApproval(executor: DbExecutor, reviewId: string) {
     const [result] = await executor
       .select({
@@ -249,13 +240,6 @@ export class ReviewsRepository {
     return review;
   }
 
-  /**
-   * Atomically transitions a PENDING review to a terminal status.
-   *
-   * The `status = 'PENDING'` guard in the WHERE clause is what
-   * prevents a reviewer from approving/rejecting the same review
-   * twice under concurrent requests.
-   */
   async transitionFromPending(
     executor: DbExecutor,
     reviewId: string,

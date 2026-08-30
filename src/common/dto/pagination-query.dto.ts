@@ -1,12 +1,7 @@
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
-/**
- * Base query DTO for any paginated list endpoint.
- *
- * Extend this in feature modules and add
- * feature-specific filters on top of it.
- */
+// Base query DTO for any paginated list endpoint.
 export class PaginationQueryDto {
   @IsOptional()
   @Type(() => Number)

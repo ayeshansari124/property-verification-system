@@ -61,8 +61,6 @@ export class PropertiesController {
     @Param('id') id: string,
     @Query() query: PaginationQueryDto,
   ) {
-    // Ensures a 404 for an unknown property instead of an
-    // empty-but-misleading history page.
     await this.propertiesService.findOne(id);
 
     return this.auditService.getHistory(id, query.page ?? 1, query.limit ?? 20);

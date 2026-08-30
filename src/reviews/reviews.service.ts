@@ -55,15 +55,8 @@ export class ReviewsService {
 
     return review;
   }
-
-  /**
-   * REVIEWER approves a pending review.
-   *
-   * This is the only place the master `properties` table is
-   * updated as a result of the checker/reviewer workflow, and it
-   * always happens together with an audit log entry in the same
-   * transaction - nothing is overwritten without history.
-   */
+  
+// REVIEWER approves a pending review.
   async approve(reviewId: string, reviewerId: string, reviewerNotes?: string) {
     const db = this.databaseService.db;
 

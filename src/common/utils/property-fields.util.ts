@@ -1,16 +1,3 @@
-/**
- * The set of Property fields a Data Checker / Admin
- * is allowed to propose changes to.
- *
- * This list is the single source of truth for:
- *  - which DTO fields get merged into a property review proposal
- *  - which fields get diffed when a review is approved
- *  - which fields get diffed on a direct admin PUT /properties/:id
- *
- * Keeping this in one place avoids the previous bug surface where
- * assignments.service.ts and reviews.service.ts each hard-coded
- * their own copy of this list and could silently drift apart.
- */
 export const EDITABLE_PROPERTY_FIELDS = [
   'address',
   'city',
@@ -45,15 +32,6 @@ export interface PropertyFieldDiff {
   newValues: Record<string, unknown>;
 }
 
-/**
- * Merges a partial DTO onto an existing property snapshot,
- * producing the full "proposed" record plus the list of
- * fields that were actually supplied by the caller.
- *
- * Used when a Data Checker submits an update: the DTO only
- * contains the fields they touched, but a Property Review
- * always stores a full before/after snapshot.
- */
 export function buildProposedValues(
   existing: Record<string, unknown>,
   dto: PartialPropertyValues,
@@ -71,15 +49,6 @@ export function buildProposedValues(
   return { newValues, changedFields };
 }
 
-/**
- * Compares two full property snapshots field-by-field and
- * returns only the fields whose values actually differ.
- *
- * Used at approval time (and on direct admin edits) so that
- * the audit log and the Property UPDATE only ever touch
- * fields that truly changed - even if the proposal was
- * created against stale data.
- */
 export function diffPropertyValues(
   oldValues: Record<string, unknown>,
   newValues: Record<string, unknown>,

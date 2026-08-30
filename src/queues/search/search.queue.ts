@@ -22,11 +22,6 @@ export class SearchQueue implements OnModuleDestroy {
     });
   }
 
-  /**
-   * Enqueued whenever a property is modified (review approval,
-   * or a direct admin edit). Simulates external AI/search
-   * verification of the new values.
-   */
   async addPropertyVerificationJob(propertyId: string) {
     await this.queue.add(
       SEARCH_JOB_NAMES.VERIFY_PROPERTY,

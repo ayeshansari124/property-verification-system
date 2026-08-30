@@ -34,9 +34,7 @@ export class AssignmentsService {
     private readonly databaseService: DatabaseService,
   ) {}
 
-  /**
-   * ADMIN creates a new assignment. New assignments always start as OPEN.
-   */
+  //  ADMIN creates a new assignment. New assignments always start as OPEN.
   async create(dto: CreateAssignmentDto, adminId: string) {
     const db = this.databaseService.db;
 
@@ -72,13 +70,7 @@ export class AssignmentsService {
     return result;
   }
 
-  /**
-   * DATA_CHECKER claims an OPEN assignment. OPEN -> CLAIMED.
-   *
-   * The atomicity guarantee lives in the repository's conditional
-   * UPDATE (status = 'OPEN' in the WHERE clause), so at most one
-   * concurrent claim request can ever succeed for a given assignment.
-   */
+  //  DATA_CHECKER claims an OPEN assignment. OPEN -> CLAIMED.
   async claim(assignmentId: string, checkerId: string) {
     const claimed = await this.assignmentsRepository.claimOpenAssignment(
       assignmentId,
@@ -100,9 +92,7 @@ export class AssignmentsService {
     );
   }
 
-  /**
-   * DATA_CHECKER starts working on their assignment. CLAIMED -> IN_PROGRESS.
-   */
+  //DATA_CHECKER starts working on their assignment. CLAIMED -> IN_PROGRESS.
   async start(assignmentId: string, checkerId: string) {
     const started = await this.assignmentsRepository.startClaimedAssignment(
       assignmentId,
@@ -128,13 +118,7 @@ export class AssignmentsService {
     );
   }
 
-  /**
-   * DATA_CHECKER proposes a property change.
-   *
-   * IMPORTANT: the master `properties` table is NOT modified here.
-   * The proposed values are stored as a pending Property Review.
-   * The real property is only changed once a reviewer approves it.
-   */
+  //DATA_CHECKER proposes a property change.
   async updateProperty(
     assignmentId: string,
     propertyId: string,
@@ -190,8 +174,7 @@ export class AssignmentsService {
         throw new BadRequestException('No property fields were provided');
       }
 
-      // Don't allow multiple PENDING reviews for the same property
-      // within this assignment.
+      // Don't allow multiple PENDING reviews for the same property within this assignment.
       const existingPendingReview =
         await this.reviewsRepository.findPendingByAssignmentProperty(
           tx,
@@ -226,12 +209,7 @@ export class AssignmentsService {
     });
   }
 
-  /**
-   * DATA_CHECKER submits their assignment. IN_PROGRESS -> SUBMITTED.
-   *
-   * An assignment cannot be submitted while any of its properties
-   * still has a PENDING review.
-   */
+  // DATA_CHECKER submits their assignment. IN_PROGRESS -> SUBMITTED.
   async submit(assignmentId: string, checkerId: string) {
     const db = this.databaseService.db;
 
@@ -283,9 +261,7 @@ export class AssignmentsService {
     });
   }
 
-  /**
-   * ADMIN or REVIEWER completes a submitted assignment. SUBMITTED -> COMPLETED.
-   */
+  // ADMIN or REVIEWER completes a submitted assignment. SUBMITTED -> COMPLETED.
   async complete(assignmentId: string) {
     const completed =
       await this.assignmentsRepository.completeSubmittedAssignment(
@@ -307,9 +283,7 @@ export class AssignmentsService {
     );
   }
 
-  /**
-   * Paginated assignment list. ADMIN, DATA_CHECKER and REVIEWER can view.
-   */
+  // Paginated assignment list. ADMIN, DATA_CHECKER and REVIEWER can view.
   async findAll(
     page: number,
     limit: number,
@@ -328,9 +302,7 @@ export class AssignmentsService {
     };
   }
 
-  /**
-   * One assignment together with its assigned properties.
-   */
+  // One assignment together with its assigned properties.
   async findOne(assignmentId: string, userId: string, userRole: string) {
     const assignment = await this.assignmentsRepository.findById(assignmentId);
 

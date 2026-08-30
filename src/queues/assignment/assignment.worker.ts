@@ -17,11 +17,6 @@ import {
   ASSIGNMENT_QUEUE_NAME,
 } from './assignment-queue.constants';
 
-/**
- * Rough heuristic used to turn a property count into an
- * estimated completion time for the assignment stats job.
- * No real AI/ML estimation is required per the assignment spec.
- */
 const ESTIMATED_MINUTES_PER_PROPERTY = 5;
 
 @Injectable()

@@ -25,10 +25,6 @@ export class AssignmentQueue implements OnModuleDestroy {
     });
   }
 
-  /**
-   * Enqueued whenever an assignment is created.
-   * Generates statistics (total properties, estimated completion time).
-   */
   async addAssignmentStatsJob(assignmentId: string) {
     await this.queue.add(
       ASSIGNMENT_JOB_NAMES.CALCULATE_STATS,

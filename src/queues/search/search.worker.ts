@@ -60,8 +60,6 @@ export class SearchWorker implements OnModuleInit, OnModuleDestroy {
   private async verifyProperty(propertyId: string) {
     this.logger.log(`Starting property verification: ${propertyId}`);
 
-    // Simulate an external AI/search verification call.
-    // No real AI integration is required for this assignment.
     await new Promise((resolve) => setTimeout(resolve, VERIFICATION_DELAY_MS));
 
     const confidenceScore = Number((0.8 + Math.random() * 0.2).toFixed(2));

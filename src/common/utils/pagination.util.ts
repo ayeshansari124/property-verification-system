@@ -1,19 +1,12 @@
 import { PaginationMeta } from '../interfaces/paginated-result.interface';
 
-/**
- * Converts a validated (page, limit) pair into a SQL OFFSET.
- *
- * Assumes page/limit have already been validated
- * (see PaginationQueryDto) - this does not re-clamp them.
- */
+// Converts a validated (page, limit) pair into a SQL OFFSET.
 export function getOffset(page: number, limit: number): number {
   return (page - 1) * limit;
 }
 
-/**
- * Builds the standard pagination metadata block
- * returned by every paginated list endpoint.
- */
+// Builds the standard pagination metadata block returned by every paginated list endpoint.
+ 
 export function buildPaginationMeta(
   total: number,
   page: number,

@@ -55,14 +55,7 @@ export class PropertiesService {
     return property;
   }
 
-  /**
-   * ADMIN direct override of a property record.
-   *
-   * This bypasses the checker -> reviewer approval workflow
-   * entirely, so it is intentionally restricted to ADMIN and
-   * still writes a full audit entry - nothing is overwritten
-   * without history, even on the "fast path".
-   */
+  // ADMIN direct override of a property record.
   async update(id: string, dto: UpdatePropertyDto, adminId: string) {
     const db = this.databaseService.db;
 
@@ -98,9 +91,6 @@ export class PropertiesService {
 
       return updatedProperty;
     });
-
-    // Property was modified -> trigger the background
-    // verification job, same as on review approval.
     await this.searchQueue.addPropertyVerificationJob(result.id);
 
     return result;

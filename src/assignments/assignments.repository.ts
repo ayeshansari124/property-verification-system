@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, eq, inArray, SQL } from 'drizzle-orm';
-
 import { DatabaseService } from '../database/database.service';
 import {
   assignmentProperties,
@@ -59,14 +58,8 @@ export class AssignmentsRepository {
     );
   }
 
-  /**
-   * Atomically claims an OPEN assignment for a checker.
-   *
-   * The WHERE clause including `status = 'OPEN'` is what makes
-   * this safe under concurrency: only one of two simultaneous
-   * claim requests can match a row and return it, because
-   * Postgres serializes concurrent UPDATEs on the same row.
-   */
+// Atomically claims an OPEN assignment for a checker.
+
   async claimOpenAssignment(assignmentId: string, checkerId: string) {
     const [claimed] = await this.db
       .update(assignments)
@@ -83,9 +76,7 @@ export class AssignmentsRepository {
     return claimed;
   }
 
-  /**
-   * Atomically transitions a checker's own CLAIMED assignment to IN_PROGRESS.
-   */
+//  Atomically transitions a checker's own CLAIMED assignment to IN_PROGRESS.
   async startClaimedAssignment(assignmentId: string, checkerId: string) {
     const [started] = await this.db
       .update(assignments)
@@ -102,15 +93,7 @@ export class AssignmentsRepository {
     return started;
   }
 
-  /**
-   * Atomically transitions a checker's own IN_PROGRESS assignment to SUBMITTED.
-   *
-   * Takes an explicit executor (rather than defaulting to the pool `db`)
-   * because this is always called from inside `AssignmentsService.submit()`'s
-   * transaction: the pending-reviews count check and this status update
-   * must commit together, or a review could sneak in between the check
-   * and the update under concurrent requests.
-   */
+  // Atomically transitions a checker's own IN_PROGRESS assignment to SUBMITTED.
   async submitInProgressAssignment(
     executor: DbExecutor,
     assignmentId: string,
@@ -134,9 +117,7 @@ export class AssignmentsRepository {
     return submitted;
   }
 
-  /**
-   * Atomically transitions a SUBMITTED assignment to COMPLETED.
-   */
+  // Atomically transitions a SUBMITTED assignment to COMPLETED.
   async completeSubmittedAssignment(assignmentId: string) {
     const [completed] = await this.db
       .update(assignments)

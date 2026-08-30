@@ -13,7 +13,6 @@ export class CreateAssignmentDto {
   @IsNotEmpty()
   @MaxLength(200)
   name: string;
-
   @IsArray()
   @ArrayNotEmpty()
   @ArrayUnique()

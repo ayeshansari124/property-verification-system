@@ -28,9 +28,7 @@ describe('ReviewsService', () => {
   let searchQueue: jest.Mocked<Pick<SearchQueue, 'addPropertyVerificationJob'>>;
   let databaseService: { db: { transaction: jest.Mock } };
 
-  // A fake transaction that just runs the callback with a stub `tx`
-  // object - the repositories are already mocked, so `tx` only needs
-  // to be a value that gets passed through to them.
+ 
   const fakeTx = {} as any;
 
   beforeEach(() => {
